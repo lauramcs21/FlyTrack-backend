@@ -1,9 +1,15 @@
+# ===== PERMISOS REQUERIDOS PARA OIDC =====
+permissions:
+  id-token: write   # ✅ Requerido para autenticación OIDC con GCP
+  contents: read    # ✅ Requerido para actions/checkout@v4
+# ===========================================
+
 name: 🚀 CD - Deploy Flytrack Backend
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:  # Permitir deploy manual desde la UI de GitHub
 
 env:
   GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
@@ -15,12 +21,14 @@ jobs:
   deploy:
     name: 🎯 Deploy to Cloud Run
     runs-on: ubuntu-latest
-    environment: production
+    environment: production  # Requiere aprobación si configuras environment protection rules
     
     steps:
+      # ===== 1. Checkout del código =====
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
+      # ===== 2. Autenticación a Google Cloud vía OIDC =====
       - name: 🔐 Authenticate to Google Cloud via OIDC
         uses: google-github-actions/auth@v2
         with:
@@ -28,25 +36,31 @@ jobs:
           service_account: 'flytrack-github-deployer@flytrack-494515.iam.gserviceaccount.com'
           token_format: 'access_token'
 
+      # ===== 3. Setup de gcloud CLI =====
       - name: 🛠️ Setup Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      # ===== 4. Configurar Docker para Artifact Registry =====
       - name: 🐳 Configure Docker for GAR
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
 
+      # ===== 5. Generar tag único para la imagen =====
       - name: 🏷️ Generate image tag
         id: image
         run: |
           TAG="${{ env.ARTIFACT_REGISTRY }}/flytrack-backend:${{ github.sha }}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
-          # ✅ Usar variable de entorno GITHUB_SHA con sintaxis bash
+          # ✅ Usar variable de entorno GITHUB_SHA con sintaxis bash (NO github.sha::7)
           echo "short_sha=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
 
+      # ===== 6. Build y Push de la imagen Docker =====
       - name: 🐳 Build and Push Docker Image
         run: |
+          # ✅ --pull fuerza descargar imágenes base frescas (evita caché de Java 17)
           docker build --pull -t ${{ steps.image.outputs.tag }} .
           docker push ${{ steps.image.outputs.tag }}
 
+      # ===== 7. Deploy a Cloud Run con secrets inyectados =====
       - name: 🚀 Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
@@ -63,6 +77,7 @@ jobs:
             --set-secrets="SPRING_DATASOURCE_PASSWORD=flytrack-db-password:latest,BREVO_API_KEY=flytrack-brevo-api-key:latest,SPRING_MAIL_PASSWORD=flytrack-mail-password:latest,APP_JWT_SECRET=flytrack-jwt-secret:latest" \
             --update-labels="app=flytrack,env=prod,commit-sha=${{ steps.image.outputs.short_sha }},deployed-by=github-actions"
 
+      # ===== 8. Verificar que el deploy fue exitoso =====
       - name: 🧪 Verify deployment
         run: |
           SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
@@ -70,6 +85,7 @@ jobs:
             --format="value(status.url)")
           echo "🔗 Service URL: $SERVICE_URL"
           
+          # Health check con reintentos (30 intentos de 10 segundos = 5 minutos máximo)
           for i in {1..30}; do
             if curl -sf "$SERVICE_URL/actuator/health" | jq -e '.status == "UP"' > /dev/null; then
               echo "✅ Service is healthy"
