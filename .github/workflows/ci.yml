@@ -25,14 +25,16 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      # ===== AUTENTICACIÓN OIDC SIN token_format =====
+      # ===== AUTENTICACIÓN OIDC CON TOKEN ESTÁTICO =====
       - name: 🔐 Authenticate to Google Cloud via OIDC
         uses: google-github-actions/auth@v2
+        id: auth
         with:
           workload_identity_provider: 'projects/272814233394/locations/global/workloadIdentityPools/github-pool/providers/github-provider-v2'
           service_account: 'flytrack-github-deployer@flytrack-494515.iam.gserviceaccount.com'
+          token_format: 'access_token'
           audience: 'https://github.com/laumcs21/FlyTrack-backend'
-          # ✅ SIN token_format - gcloud usará el archivo ADC automáticamente
+          create_credentials_file: false
 
       - name: 🛠️ Setup Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -45,12 +47,17 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "short_sha=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
 
-      - name: 🐳 Build and Push with Cloud Build
+      # ===== LOGIN DIRECTO DE DOCKER CON TOKEN ESTÁTICO =====
+      - name: 🐳 Login to Artifact Registry
         run: |
-          gcloud builds submit --tag ${{ steps.image.outputs.tag }} . \
-          --project=${{ env.GCP_PROJECT_ID }} \
-          --region=${{ env.GCP_REGION }} \
-          --timeout=20m
+          echo "${{ steps.auth.outputs.access_token }}" | \
+            docker login -u oauth2accesstoken --password-stdin ${{ env.GCP_REGION }}-docker.pkg.dev
+
+      # ===== BUILD LOCAL Y PUSH CON DOCKER =====
+      - name: 🐳 Build and Push Docker Image
+        run: |
+          docker build --pull --no-cache -t ${{ steps.image.outputs.tag }} .
+          docker push ${{ steps.image.outputs.tag }}
 
       # ===== DEPLOY A CLOUD RUN =====
       - name: 🚀 Deploy to Cloud Run
