@@ -45,13 +45,12 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "short_sha=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
 
-      # ===== BUILD Y PUSH CON CLOUD BUILD =====
       - name: 🐳 Build and Push with Cloud Build
         run: |
           gcloud builds submit --tag ${{ steps.image.outputs.tag }} . \
-            --project=${{ env.GCP_PROJECT_ID }} \
-            --region=${{ env.GCP_REGION }} \
-            --timeout=20m
+          --project=${{ env.GCP_PROJECT_ID }} \
+          --region=${{ env.GCP_REGION }} \
+          --timeout=20m
 
       # ===== DEPLOY A CLOUD RUN =====
       - name: 🚀 Deploy to Cloud Run
