@@ -1,4 +1,5 @@
 permissions:
+  id-token: write
   contents: read
 
 name: 🚀 CD - Deploy Flytrack Backend
@@ -24,21 +25,23 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      # ===== AUTENTICACIÓN CON CLAVE JSON (FALLBACK GARANTIZADO) =====
-      - name: 🔐 Authenticate to Google Cloud
+      - name: 🔐 Authenticate to Google Cloud via OIDC
         uses: google-github-actions/auth@v2
+        id: auth
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: 'projects/272814233394/locations/global/workloadIdentityPools/github-pool/providers/github-provider-v2'
+          service_account: 'flytrack-github-deployer@flytrack-494515.iam.gserviceaccount.com'
+          token_format: 'access_token'  # ← Obtiene token estático
+          audience: 'https://github.com/laumcs21/FlyTrack-backend'
+          create_credentials_file: false  # ← EVITA conflicto con credential helper
 
       - name: 🛠️ Setup Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # ===== CONFIGURAR DOCKER CON CLAVE JSON =====
-      - name: 🐳 Configure Docker for Artifact Registry
+      - name: 🐳 Login to Artifact Registry
         run: |
-          gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin ${{ env.GCP_REGION }}-docker.pkg.dev
-
+          echo "${{ steps.auth.outputs.access_token }}" | \
+            docker login -u oauth2accesstoken --password-stdin ${{ env.GCP_REGION }}-docker.pkg.dev
       - name: 🏷️ Generate image tag
         id: image
         run: |
