@@ -25,21 +25,22 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      # ===== AUTENTICACIÓN OIDC CON TOKEN ESTÁTICO =====
       - name: 🔐 Authenticate to Google Cloud via OIDC
         uses: google-github-actions/auth@v2
         id: auth
         with:
           workload_identity_provider: 'projects/272814233394/locations/global/workloadIdentityPools/github-pool/providers/github-provider-v2'
           service_account: 'flytrack-github-deployer@flytrack-494515.iam.gserviceaccount.com'
-          token_format: 'access_token'
+        
           audience: 'https://github.com/laumcs21/FlyTrack-backend'
-          create_credentials_file: false
 
       - name: 🛠️ Setup Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # ===== GENERAR TAG DE IMAGEN =====
+      - name: 🐳 Login to Artifact Registry
+        run: |
+          gcloud auth application-default print-access-token | \
+            docker login -u oauth2accesstoken --password-stdin ${{ env.GCP_REGION }}-docker.pkg.dev
       - name: 🏷️ Generate image tag
         id: image
         run: |
@@ -47,19 +48,11 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "short_sha=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
 
-      # ===== LOGIN DIRECTO DE DOCKER CON TOKEN ESTÁTICO =====
-      - name: 🐳 Login to Artifact Registry
-        run: |
-          echo "${{ steps.auth.outputs.access_token }}" | \
-            docker login -u oauth2accesstoken --password-stdin ${{ env.GCP_REGION }}-docker.pkg.dev
-
-      # ===== BUILD LOCAL Y PUSH CON DOCKER =====
       - name: 🐳 Build and Push Docker Image
         run: |
           docker build --pull --no-cache -t ${{ steps.image.outputs.tag }} .
           docker push ${{ steps.image.outputs.tag }}
 
-      # ===== DEPLOY A CLOUD RUN =====
       - name: 🚀 Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
@@ -76,7 +69,6 @@ jobs:
             --set-secrets="SPRING_DATASOURCE_PASSWORD=flytrack-db-password:latest,BREVO_API_KEY=flytrack-brevo-api-key:latest,SPRING_MAIL_PASSWORD=flytrack-mail-password:latest,APP_JWT_SECRET=flytrack-jwt-secret:latest" \
             --update-labels="app=flytrack,env=prod,commit-sha=${{ steps.image.outputs.short_sha }},deployed-by=github-actions"
 
-      # ===== VERIFICAR DEPLOY =====
       - name: 🧪 Verify deployment
         run: |
           SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.GCP_REGION }} --format="value(status.url)")
