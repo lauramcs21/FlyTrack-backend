@@ -37,9 +37,10 @@ jobs:
       - name: 🛠️ Setup Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: 🐳 Configure Docker for GAR
+      - name: 🐳 Login to Artifact Registry
         run: |
-          gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+          gcloud auth application-default print-access-token | \
+            docker login -u oauth2accesstoken --password-stdin ${{ env.GCP_REGION }}-docker.pkg.dev
       - name: 🏷️ Generate image tag
         id: image
         run: |
