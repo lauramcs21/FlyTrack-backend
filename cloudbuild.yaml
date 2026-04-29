@@ -28,6 +28,7 @@ steps:
       - '--port=8080'
       - '--min-instances=0'
       - '--max-instances=3'
+      - '--service-account=flytrack-github-deployer@flytrack-494515.iam.gserviceaccount.com'
       - '--set-env-vars=SPRING_PROFILES_ACTIVE=prod,SPRING_DATASOURCE_URL=jdbc:postgresql://aws-1-us-east-1.pooler.supabase.com:5432/postgres,SPRING_DATASOURCE_USERNAME=postgres.bajdizxoykudmiuscebu,SPRING_MAIL_USERNAME=flytrack8@gmail.com,APP_MAIL_FROM=flytrack8@gmail.com'
       - '--set-secrets=SPRING_DATASOURCE_PASSWORD=flytrack-db-password:latest,BREVO_API_KEY=flytrack-brevo-api-key:latest,SPRING_MAIL_PASSWORD=flytrack-mail-password:latest,APP_JWT_SECRET=flytrack-jwt-secret:latest'
 
