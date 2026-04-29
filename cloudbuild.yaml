@@ -1,0 +1,42 @@
+# cloudbuild.yaml - Pipeline mínimo para FlyTrack Backend
+steps:
+  # 1. Build de imagen Docker
+  - name: 'gcr.io/cloud-builders/docker'
+    id: build-image
+    args: ['build', '-t', '${_ARTIFACT_REGISTRY}/${_SERVICE_NAME}:${SHORT_SHA}', '.']
+
+  # 2. Push a Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push-image
+    args: ['push', '${_ARTIFACT_REGISTRY}/${_SERVICE_NAME}:${SHORT_SHA}']
+
+  # 3. Deploy a Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: deploy-cloud-run
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE_NAME}'
+      - '--image=${_ARTIFACT_REGISTRY}/${_SERVICE_NAME}:${SHORT_SHA}'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--memory=1Gi'
+      - '--cpu=1'
+      - '--timeout=300'
+      - '--port=8080'
+      - '--min-instances=0'
+      - '--max-instances=3'
+      - '--set-env-vars=SPRING_PROFILES_ACTIVE=prod,SPRING_DATASOURCE_URL=jdbc:postgresql://aws-1-us-east-1.pooler.supabase.com:5432/postgres,SPRING_DATASOURCE_USERNAME=postgres.bajdizxoykudmiuscebu,SPRING_MAIL_USERNAME=flytrack8@gmail.com,APP_MAIL_FROM=flytrack8@gmail.com'
+      - '--set-secrets=SPRING_DATASOURCE_PASSWORD=flytrack-db-password:latest,BREVO_API_KEY=flytrack-brevo-api-key:latest,SPRING_MAIL_PASSWORD=flytrack-mail-password:latest,APP_JWT_SECRET=flytrack-jwt-secret:latest'
+
+substitutions:
+  _REGION: us-central1
+  _SERVICE_NAME: flytrack-backend
+  _ARTIFACT_REGISTRY: us-central1-docker.pkg.dev/flytrack-494515/flytrack-images
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: '1200s'
