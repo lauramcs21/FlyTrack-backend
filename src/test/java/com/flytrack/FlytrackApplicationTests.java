@@ -5,7 +5,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
 class FlytrackApplicationTests {
-
+	@MockBean
+    private EmailService emailService;
 	@Test
 	void contextLoads() {
 	}
